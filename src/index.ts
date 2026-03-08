@@ -30,11 +30,12 @@ export function createServer(): McpServer {
     description: 'Read all notes from a specific Apple Notes folder',
     inputSchema: {
       folder: z.string().describe('Name of the folder to read notes from'),
+      id: z.string().optional().describe('Folder ID from list_folders. When provided, takes precedence over folder name for lookup (useful when multiple folders share the same name)'),
     },
     annotations: { readOnlyHint: true },
-  }, async ({ folder }) => {
+  }, async ({ folder, id }) => {
     try {
-      const notes = await readNotes(folder);
+      const notes = await readNotes(folder, id);
       return {
         content: [{ type: 'text', text: JSON.stringify(notes, null, 2) }],
       };

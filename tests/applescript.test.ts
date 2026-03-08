@@ -107,4 +107,40 @@ describe('readNotes', () => {
     const scriptBody = args[eIndex + 1]!;
     expect(scriptBody).not.toContain('My Folder');
   });
+
+  it('uses folder ID when provided', async () => {
+    const RS = '\x1E';
+    const US = '\x1F';
+    const output = `Note 1${US}Body 1${US}2026-03-01${US}2026-03-05`;
+    mockOsascriptOutput(output);
+
+    const result = await readNotes('Notes', 'x-coredata://ABC/ICFolder/p3');
+
+    expect(result).toEqual([
+      { title: 'Note 1', body: 'Body 1', createdAt: '2026-03-01', modifiedAt: '2026-03-05' },
+    ]);
+
+    // Should use the ID-based script and pass ID as arg
+    const callArgs = mockExecFile.mock.calls[0]!;
+    const args = callArgs[1] as string[];
+    expect(args).toContain('x-coredata://ABC/ICFolder/p3');
+    // ID should not be interpolated into the script body
+    const eIndex = args.indexOf('-e');
+    const scriptBody = args[eIndex + 1]!;
+    expect(scriptBody).not.toContain('x-coredata://ABC/ICFolder/p3');
+    // Script should reference folder id lookup
+    expect(scriptBody).toContain('folder id');
+  });
+
+  it('uses name-based lookup when id is not provided', async () => {
+    mockOsascriptOutput('');
+    await readNotes('Work');
+
+    const callArgs = mockExecFile.mock.calls[0]!;
+    const args = callArgs[1] as string[];
+    const eIndex = args.indexOf('-e');
+    const scriptBody = args[eIndex + 1]!;
+    // Should use name-based lookup, not ID-based
+    expect(scriptBody).not.toContain('folder id');
+  });
 });

@@ -80,7 +80,7 @@ describe('MCP Server', () => {
       const content = result.content as Array<{ type: string; text: string }>;
       const parsed = JSON.parse(content[0]!.text);
       expect(parsed).toEqual(notes);
-      expect(mockReadNotes).toHaveBeenCalledWith('Work');
+      expect(mockReadNotes).toHaveBeenCalledWith('Work', undefined);
     });
 
     it('returns error when folder not found', async () => {
@@ -104,6 +104,32 @@ describe('MCP Server', () => {
       });
 
       expect(result.isError).toBe(true);
+    });
+
+    it('passes id to readNotes when provided', async () => {
+      const notes = [
+        { title: 'Note 1', body: 'Content 1', createdAt: '2026-03-01', modifiedAt: '2026-03-05' },
+      ];
+      mockReadNotes.mockResolvedValue(notes);
+
+      const result = await client.callTool({
+        name: 'read_notes',
+        arguments: { folder: 'Notes', id: 'x-coredata://ABC/ICFolder/p3' },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(mockReadNotes).toHaveBeenCalledWith('Notes', 'x-coredata://ABC/ICFolder/p3');
+    });
+
+    it('calls readNotes without id when id is not provided', async () => {
+      mockReadNotes.mockResolvedValue([]);
+
+      await client.callTool({
+        name: 'read_notes',
+        arguments: { folder: 'Work' },
+      });
+
+      expect(mockReadNotes).toHaveBeenCalledWith('Work', undefined);
     });
   });
 

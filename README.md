@@ -13,7 +13,13 @@ Starting read-only to keep things simple and low-risk. Write operations (create 
 | Tool | Description | Input |
 |------|-------------|-------|
 | `list_folders` | List all folders with note counts | None |
-| `read_notes` | Read all notes from a folder (title + plain text body) | `folder` (string) |
+| `read_notes` | Read all notes from a folder (title + plain text body) | `folder` (string, required), `id` (string, optional) |
+
+### Folder ID lookups
+
+`list_folders` returns a unique `id` for each folder. You can pass this `id` to `read_notes` to target a specific folder. When `id` is provided it takes precedence over `folder` for the lookup, though `folder` is always required for human readability.
+
+This matters when multiple folders share the same name. Apple Notes can store notes across multiple account backends — most commonly iCloud, but also Microsoft Exchange. Apple and Microsoft have a long-standing integration that allows Apple Notes to sync with Microsoft's Sticky Notes service via Exchange. If a user has both backends enabled, they'll have two folders named "Notes" (one per account) that are only distinguishable by ID.
 
 ## Setup
 

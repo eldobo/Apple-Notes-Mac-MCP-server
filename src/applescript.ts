@@ -50,7 +50,7 @@ end joinList
 const RS = '\x1E';
 const US = '\x1F';
 
-const READ_NOTES_SCRIPT = `
+const READ_NOTES_BY_NAME_SCRIPT = `
 on run argv
   set folderName to item 1 of argv
   set RS to ASCII character 30
@@ -74,13 +74,38 @@ on run argv
 end run
 `;
 
+const READ_NOTES_BY_ID_SCRIPT = `
+on run argv
+  set folderId to item 1 of argv
+  set RS to ASCII character 30
+  set US to ASCII character 31
+  tell application "Notes"
+    set targetFolder to folder id folderId
+    set noteEntries to {}
+    repeat with n in notes of targetFolder
+      set nTitle to name of n
+      set nBody to plaintext of n
+      set nCreated to creation date of n as string
+      set nModified to modification date of n as string
+      set end of noteEntries to nTitle & US & nBody & US & nCreated & US & nModified
+    end repeat
+    set oldDelimiters to AppleScript's text item delimiters
+    set AppleScript's text item delimiters to RS
+    set output to noteEntries as string
+    set AppleScript's text item delimiters to oldDelimiters
+    return output
+  end tell
+end run
+`;
+
 export async function listFolders(): Promise<Folder[]> {
   const output = await runOsascript(LIST_FOLDERS_SCRIPT);
   return JSON.parse(output) as Folder[];
 }
 
-export async function readNotes(folder: string): Promise<Note[]> {
-  const output = await runOsascript(READ_NOTES_SCRIPT, [folder]);
+export async function readNotes(folder: string, id?: string): Promise<Note[]> {
+  const script = id ? READ_NOTES_BY_ID_SCRIPT : READ_NOTES_BY_NAME_SCRIPT;
+  const output = await runOsascript(script, [id ?? folder]);
   if (!output) return [];
   return output.split(RS).map((record) => {
     const [title = '', body = '', createdAt = '', modifiedAt = ''] = record.split(US);
