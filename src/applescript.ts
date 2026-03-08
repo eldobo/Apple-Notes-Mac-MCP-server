@@ -46,45 +46,32 @@ on joinList(theList, delimiter)
 end joinList
 `;
 
+// Record separator (ASCII 30) and unit separator (ASCII 31) to delimit fields/records
+const RS = '\x1E';
+const US = '\x1F';
+
 const READ_NOTES_SCRIPT = `
 on run argv
   set folderName to item 1 of argv
+  set RS to ASCII character 30
+  set US to ASCII character 31
   tell application "Notes"
     set targetFolder to folder folderName
-    set noteList to {}
+    set noteEntries to {}
     repeat with n in notes of targetFolder
       set nTitle to name of n
       set nBody to plaintext of n
-      -- Escape double quotes and newlines in body
-      set nBody to my replaceText(nBody, "\\\\", "\\\\\\\\")
-      set nBody to my replaceText(nBody, "\\"", "\\\\\\"")
-      set nBody to my replaceText(nBody, return, "\\\\n")
-      set nBody to my replaceText(nBody, linefeed, "\\\\n")
       set nCreated to creation date of n as string
       set nModified to modification date of n as string
-      set end of noteList to "{\\"title\\":\\"" & nTitle & "\\",\\"body\\":\\"" & nBody & "\\",\\"createdAt\\":\\"" & nCreated & "\\",\\"modifiedAt\\":\\"" & nModified & "\\"}"
+      set end of noteEntries to nTitle & US & nBody & US & nCreated & US & nModified
     end repeat
-    return "[" & my joinList(noteList, ",") & "]"
+    set oldDelimiters to AppleScript's text item delimiters
+    set AppleScript's text item delimiters to RS
+    set output to noteEntries as string
+    set AppleScript's text item delimiters to oldDelimiters
+    return output
   end tell
 end run
-
-on joinList(theList, delimiter)
-  set oldDelimiters to AppleScript's text item delimiters
-  set AppleScript's text item delimiters to delimiter
-  set theString to theList as string
-  set AppleScript's text item delimiters to oldDelimiters
-  return theString
-end joinList
-
-on replaceText(theText, searchStr, replaceStr)
-  set oldDelimiters to AppleScript's text item delimiters
-  set AppleScript's text item delimiters to searchStr
-  set theItems to text items of theText
-  set AppleScript's text item delimiters to replaceStr
-  set theText to theItems as string
-  set AppleScript's text item delimiters to oldDelimiters
-  return theText
-end replaceText
 `;
 
 export async function listFolders(): Promise<Folder[]> {
@@ -94,5 +81,9 @@ export async function listFolders(): Promise<Folder[]> {
 
 export async function readNotes(folder: string): Promise<Note[]> {
   const output = await runOsascript(READ_NOTES_SCRIPT, [folder]);
-  return JSON.parse(output) as Note[];
+  if (!output) return [];
+  return output.split(RS).map((record) => {
+    const [title = '', body = '', createdAt = '', modifiedAt = ''] = record.split(US);
+    return { title, body, createdAt, modifiedAt };
+  });
 }

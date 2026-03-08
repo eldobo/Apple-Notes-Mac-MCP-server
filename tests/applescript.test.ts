@@ -67,19 +67,22 @@ describe('readNotes', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns parsed note objects for a valid folder', async () => {
-    const notes = [
-      { title: 'Meeting notes', body: 'Discussed Q2 plans', createdAt: '2026-03-01', modifiedAt: '2026-03-05' },
-      { title: 'Ideas', body: 'New feature ideas', createdAt: '2026-02-15', modifiedAt: '2026-03-08' },
-    ];
-    mockOsascriptOutput(JSON.stringify(notes));
+    // AppleScript returns RS-delimited records, US-delimited fields
+    const RS = '\x1E';
+    const US = '\x1F';
+    const output = `Meeting notes${US}Discussed Q2 plans${US}2026-03-01${US}2026-03-05${RS}Ideas${US}New feature ideas${US}2026-02-15${US}2026-03-08`;
+    mockOsascriptOutput(output);
 
     const result = await readNotes('Work');
 
-    expect(result).toEqual(notes);
+    expect(result).toEqual([
+      { title: 'Meeting notes', body: 'Discussed Q2 plans', createdAt: '2026-03-01', modifiedAt: '2026-03-05' },
+      { title: 'Ideas', body: 'New feature ideas', createdAt: '2026-02-15', modifiedAt: '2026-03-08' },
+    ]);
   });
 
   it('returns empty array for folder with no notes', async () => {
-    mockOsascriptOutput(JSON.stringify([]));
+    mockOsascriptOutput('');
 
     const result = await readNotes('Empty Folder');
     expect(result).toEqual([]);
@@ -92,7 +95,7 @@ describe('readNotes', () => {
   });
 
   it('passes folder name to osascript without interpolation into script', async () => {
-    mockOsascriptOutput('[]');
+    mockOsascriptOutput('');
     await readNotes('My Folder');
 
     // Folder name should be a separate argument, not embedded in the script string
