@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { listFolders, readNotes } from '../applescript.js';
+import { listFolders, readNotes } from '../src/applescript.js';
 import * as child_process from 'node:child_process';
 
 vi.mock('node:child_process');

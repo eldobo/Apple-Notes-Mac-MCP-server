@@ -4,14 +4,14 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 // Mock the applescript module before importing server setup
-vi.mock('../applescript.js', () => ({
+vi.mock('../src/applescript.js', () => ({
   listFolders: vi.fn(),
   readNotes: vi.fn(),
 }));
 
 // These will be imported after mock is set up
-import { listFolders, readNotes } from '../applescript.js';
-import { createServer } from '../index.js';
+import { listFolders, readNotes } from '../src/applescript.js';
+import { createServer } from '../src/index.js';
 
 const mockListFolders = vi.mocked(listFolders);
 const mockReadNotes = vi.mocked(readNotes);
