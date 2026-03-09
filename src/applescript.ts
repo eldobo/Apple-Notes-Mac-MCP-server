@@ -6,11 +6,29 @@ export interface Folder {
   noteCount: number;
 }
 
+export interface Tag {
+  name: string;
+  noteCount: number;
+}
+
+export interface ClassifiedFolder {
+  name: string;
+  id: string;
+  noteCount: number;
+  isSmartFolder: boolean;
+}
+
 export interface Note {
+  id: string;
   title: string;
   body: string;
+  tags: string[];
   createdAt: string;
   modifiedAt: string;
+}
+
+function log(message: string): void {
+  process.stderr.write(`[apple-notes] ${message}\n`);
 }
 
 function runOsascript(script: string, args: string[] = []): Promise<string> {
@@ -25,30 +43,84 @@ function runOsascript(script: string, args: string[] = []): Promise<string> {
   });
 }
 
-const LIST_FOLDERS_SCRIPT = `
+// Record separator (ASCII 30), unit separator (ASCII 31), group separator (ASCII 29)
+const RS = '\x1E';
+const US = '\x1F';
+const GS = '\x1D';
+
+// Returns all folders with classification: name US id US noteCount US isSmartFolder (0/1)
+// Smart folder detection: if first note's container ID ≠ folder ID → smart folder
+//
+// AppleScript quirk: `id of container of firstNote` throws error -1728, but
+// `id of (get container of firstNote)` works. The `get` forces AppleScript to
+// resolve the container reference to a folder object before accessing its id.
+const CLASSIFY_FOLDERS_SCRIPT = `
+set RS to ASCII character 30
+set US to ASCII character 31
 tell application "Notes"
-  set folderList to {}
+  set folderEntries to {}
   repeat with f in folders
     set fName to name of f
     set fId to id of f
     set nCount to count of notes of f
-    set end of folderList to "{\\"name\\":\\"" & fName & "\\",\\"id\\":\\"" & fId & "\\",\\"noteCount\\":" & nCount & "}"
+    set isSmart to 0
+    if nCount > 0 then
+      set firstNote to item 1 of notes of f
+      set containerId to id of (get container of firstNote)
+      if containerId is not equal to fId then
+        set isSmart to 1
+      end if
+    end if
+    set end of folderEntries to fName & US & fId & US & (nCount as string) & US & (isSmart as string)
   end repeat
-  return "[" & my joinList(folderList, ",") & "]"
-end tell
-
-on joinList(theList, delimiter)
   set oldDelimiters to AppleScript's text item delimiters
-  set AppleScript's text item delimiters to delimiter
-  set theString to theList as string
+  set AppleScript's text item delimiters to RS
+  set output to folderEntries as string
   set AppleScript's text item delimiters to oldDelimiters
-  return theString
-end joinList
+  return output
+end tell
 `;
 
-// Record separator (ASCII 30) and unit separator (ASCII 31) to delimit fields/records
-const RS = '\x1E';
-const US = '\x1F';
+// Given comma-separated smart folder IDs, returns tag→noteIds mapping
+// Format: GS between folders, RS between tag name and note IDs, US between note IDs
+const BUILD_TAG_MAP_SCRIPT = `
+on run argv
+  set smartFolderIds to item 1 of argv
+  set GS to ASCII character 29
+  set RS to ASCII character 30
+  set US to ASCII character 31
+  tell application "Notes"
+    set idList to my splitString(smartFolderIds, ",")
+    set groupEntries to {}
+    repeat with sfId in idList
+      set sf to folder id (sfId as string)
+      set tagName to name of sf
+      set noteIds to {}
+      repeat with n in notes of sf
+        set end of noteIds to id of n
+      end repeat
+      set oldDelimiters to AppleScript's text item delimiters
+      set AppleScript's text item delimiters to US
+      set noteIdStr to noteIds as string
+      set AppleScript's text item delimiters to oldDelimiters
+      set end of groupEntries to tagName & RS & noteIdStr
+    end repeat
+    set oldDelimiters to AppleScript's text item delimiters
+    set AppleScript's text item delimiters to GS
+    set output to groupEntries as string
+    set AppleScript's text item delimiters to oldDelimiters
+    return output
+  end tell
+end run
+
+on splitString(theString, theDelimiter)
+  set oldDelimiters to AppleScript's text item delimiters
+  set AppleScript's text item delimiters to theDelimiter
+  set theItems to text items of theString
+  set AppleScript's text item delimiters to oldDelimiters
+  return theItems
+end splitString
+`;
 
 const READ_NOTES_BY_NAME_SCRIPT = `
 on run argv
@@ -59,11 +131,12 @@ on run argv
     set targetFolder to folder folderName
     set noteEntries to {}
     repeat with n in notes of targetFolder
+      set nId to id of n
       set nTitle to name of n
       set nBody to plaintext of n
       set nCreated to creation date of n as string
       set nModified to modification date of n as string
-      set end of noteEntries to nTitle & US & nBody & US & nCreated & US & nModified
+      set end of noteEntries to nId & US & nTitle & US & nBody & US & nCreated & US & nModified
     end repeat
     set oldDelimiters to AppleScript's text item delimiters
     set AppleScript's text item delimiters to RS
@@ -83,11 +156,12 @@ on run argv
     set targetFolder to folder id folderId
     set noteEntries to {}
     repeat with n in notes of targetFolder
+      set nId to id of n
       set nTitle to name of n
       set nBody to plaintext of n
       set nCreated to creation date of n as string
       set nModified to modification date of n as string
-      set end of noteEntries to nTitle & US & nBody & US & nCreated & US & nModified
+      set end of noteEntries to nId & US & nTitle & US & nBody & US & nCreated & US & nModified
     end repeat
     set oldDelimiters to AppleScript's text item delimiters
     set AppleScript's text item delimiters to RS
@@ -98,17 +172,93 @@ on run argv
 end run
 `;
 
+export async function classifyFolders(): Promise<ClassifiedFolder[]> {
+  const start = Date.now();
+  const output = await runOsascript(CLASSIFY_FOLDERS_SCRIPT);
+  log(`classifyFolders: ${Date.now() - start}ms`);
+  if (!output) return [];
+  return output.split(RS).map((record) => {
+    const [name = '', id = '', noteCountStr = '0', isSmartStr = '0'] = record.split(US);
+    return {
+      name,
+      id,
+      noteCount: parseInt(noteCountStr, 10),
+      isSmartFolder: isSmartStr === '1',
+    };
+  });
+}
+
 export async function listFolders(): Promise<Folder[]> {
-  const output = await runOsascript(LIST_FOLDERS_SCRIPT);
-  return JSON.parse(output) as Folder[];
+  const start = Date.now();
+  const classified = await classifyFolders();
+  log(`listFolders: ${Date.now() - start}ms`);
+  return classified
+    .filter((f) => !f.isSmartFolder)
+    .map(({ name, id, noteCount }) => ({ name, id, noteCount }));
+}
+
+export async function listTags(): Promise<Tag[]> {
+  const start = Date.now();
+  const classified = await classifyFolders();
+  log(`listTags: ${Date.now() - start}ms`);
+  return classified
+    .filter((f) => f.isSmartFolder)
+    .map(({ name, noteCount }) => ({ name, noteCount }));
+}
+
+export async function buildTagMap(smartFolderIds: string[]): Promise<Map<string, string[]>> {
+  const tagMap = new Map<string, string[]>();
+  if (smartFolderIds.length === 0) return tagMap;
+
+  const start = Date.now();
+  const output = await runOsascript(BUILD_TAG_MAP_SCRIPT, [smartFolderIds.join(',')]);
+  log(`buildTagMap (${smartFolderIds.length} smart folders): ${Date.now() - start}ms`);
+
+  if (!output) return tagMap;
+
+  const groups = output.split(GS);
+  for (const group of groups) {
+    const [tagName = '', noteIdStr = ''] = group.split(RS);
+    if (!tagName || !noteIdStr) continue;
+    const noteIds = noteIdStr.split(US);
+    for (const noteId of noteIds) {
+      if (!noteId) continue;
+      const existing = tagMap.get(noteId) ?? [];
+      existing.push(tagName);
+      tagMap.set(noteId, existing);
+    }
+  }
+
+  return tagMap;
 }
 
 export async function readNotes(folder: string, id?: string): Promise<Note[]> {
+  const totalStart = Date.now();
+
+  // Phase 1: classify folders to find smart folders for tag resolution
+  const classified = await classifyFolders();
+  const smartFolderIds = classified.filter((f) => f.isSmartFolder).map((f) => f.id);
+
+  // Phase 2: build tag map from smart folders
+  const tagMap = await buildTagMap(smartFolderIds);
+
+  // Phase 3: read notes from target folder
+  const readStart = Date.now();
   const script = id ? READ_NOTES_BY_ID_SCRIPT : READ_NOTES_BY_NAME_SCRIPT;
   const output = await runOsascript(script, [id ?? folder]);
-  if (!output) return [];
-  return output.split(RS).map((record) => {
-    const [title = '', body = '', createdAt = '', modifiedAt = ''] = record.split(US);
-    return { title, body, createdAt, modifiedAt };
+  log(`readNotes: ${Date.now() - readStart}ms`);
+
+  if (!output) {
+    log(`readNotes total: ${Date.now() - totalStart}ms`);
+    return [];
+  }
+
+  const notes = output.split(RS).map((record) => {
+    const [noteId = '', title = '', body = '', createdAt = '', modifiedAt = ''] = record.split(US);
+    const tags = tagMap.get(noteId) ?? [];
+    return { id: noteId, title, body, tags, createdAt, modifiedAt };
   });
+
+  log(`readNotes total: ${Date.now() - totalStart}ms`);
+  return notes;
 }
