@@ -4,7 +4,7 @@
  *
  * Creates test notes in "test actual folder", exercises CRUD, then cleans up.
  */
-import { createNote, deleteNote, moveNote, updateNote, readNotes, listFolders, listTags } from '../src/applescript.js';
+import { createNote, deleteNote, moveNote, readNotes, listFolders, listTags } from '../src/applescript.js';
 
 const TEST_FOLDER = 'test actual folder';
 const TEST_FOLDER_ID = 'x-coredata://C83F395A-DE84-4A65-90F6-CCDC071037A6/ICFolder/p408';
@@ -51,17 +51,11 @@ async function main() {
     createdIds.push(id);
   });
 
-  await assert('create_note: update target', async () => {
-    const id = await createNote(TEST_FOLDER, 'Integration Test: Update Me', '<h1>Integration Test: Update Me</h1><br>Will be updated', TEST_FOLDER_ID);
-    if (!id) throw new Error('No ID returned');
-    createdIds.push(id);
-  });
-
   // 2. Verify notes appear via read_notes
   await assert('read_notes: sees created notes', async () => {
     const notes = await readNotes(TEST_FOLDER, TEST_FOLDER_ID);
     const testNotes = notes.filter(n => n.title.startsWith('Integration Test:'));
-    if (testNotes.length < 5) throw new Error(`Expected 5+ test notes, got ${testNotes.length}`);
+    if (testNotes.length < 4) throw new Error(`Expected 4+ test notes, got ${testNotes.length}`);
   });
 
   // 3. Delete "Delete Me"
@@ -86,21 +80,11 @@ async function main() {
     if (!arrived) throw new Error('Moved note not found in target folder');
   });
 
-  // 5. Update "Update Me" to add a tag
-  await assert('update_note: adds tag via body update', async () => {
-    const updateId = createdIds[4]!;
-    await updateNote(updateId, '<h1>Integration Test: Update Me</h1><br>Updated body with #testTag');
-    const notes = await readNotes(TEST_FOLDER, TEST_FOLDER_ID);
-    const updated = notes.find(n => n.id === updateId);
-    if (!updated) throw new Error('Updated note not found');
-    if (!updated.body.includes('Updated body')) throw new Error('Body not updated');
-  });
-
-  // 6. Cleanup: delete remaining test notes
+  // 5. Cleanup: delete remaining test notes
   console.log('\n--- Cleanup ---');
 
-  // Delete from test folder (plain, tagged, update me)
-  for (const id of [createdIds[0]!, createdIds[1]!, createdIds[4]!]) {
+  // Delete from test folder (plain, tagged)
+  for (const id of [createdIds[0]!, createdIds[1]!]) {
     await deleteNote(id);
     console.log(`  Deleted ${id}`);
   }

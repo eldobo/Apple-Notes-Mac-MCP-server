@@ -11,11 +11,10 @@ vi.mock('../src/applescript.js', () => ({
   createNote: vi.fn(),
   deleteNote: vi.fn(),
   moveNote: vi.fn(),
-  updateNote: vi.fn(),
 }));
 
 // These will be imported after mock is set up
-import { listFolders, listTags, readNotes, createNote, deleteNote, moveNote, updateNote } from '../src/applescript.js';
+import { listFolders, listTags, readNotes, createNote, deleteNote, moveNote } from '../src/applescript.js';
 import { createServer } from '../src/index.js';
 
 const mockListFolders = vi.mocked(listFolders);
@@ -24,7 +23,6 @@ const mockReadNotes = vi.mocked(readNotes);
 const mockCreateNote = vi.mocked(createNote);
 const mockDeleteNote = vi.mocked(deleteNote);
 const mockMoveNote = vi.mocked(moveNote);
-const mockUpdateNote = vi.mocked(updateNote);
 
 describe('MCP Server', () => {
   let client: Client;
@@ -271,33 +269,8 @@ describe('MCP Server', () => {
     });
   });
 
-  describe('update_note tool', () => {
-    it('updates a note body', async () => {
-      mockUpdateNote.mockResolvedValue();
-
-      const result = await client.callTool({
-        name: 'update_note',
-        arguments: { noteId: 'x-coredata://ABC/ICNote/p42', body: '<h1>Updated</h1>' },
-      });
-
-      expect(result.isError).toBeFalsy();
-      expect(mockUpdateNote).toHaveBeenCalledWith('x-coredata://ABC/ICNote/p42', '<h1>Updated</h1>');
-    });
-
-    it('returns error on failure', async () => {
-      mockUpdateNote.mockRejectedValue(new Error('note not found'));
-
-      const result = await client.callTool({
-        name: 'update_note',
-        arguments: { noteId: 'bad-id', body: '<h1>X</h1>' },
-      });
-
-      expect(result.isError).toBe(true);
-    });
-  });
-
   describe('tool discovery', () => {
-    it('exposes all 7 tools', async () => {
+    it('exposes all 6 tools', async () => {
       const tools = await client.listTools();
       const toolNames = tools.tools.map(t => t.name);
 
@@ -307,8 +280,7 @@ describe('MCP Server', () => {
       expect(toolNames).toContain('create_note');
       expect(toolNames).toContain('delete_note');
       expect(toolNames).toContain('move_note');
-      expect(toolNames).toContain('update_note');
-      expect(toolNames).toHaveLength(7);
+      expect(toolNames).toHaveLength(6);
     });
 
     it('list_folders has no required input', async () => {
@@ -337,7 +309,7 @@ describe('MCP Server', () => {
 
     it('write tools have readOnlyHint: false annotation', async () => {
       const tools = await client.listTools();
-      const writeToolNames = ['create_note', 'delete_note', 'move_note', 'update_note'];
+      const writeToolNames = ['create_note', 'delete_note', 'move_note'];
       for (const name of writeToolNames) {
         const tool = tools.tools.find(t => t.name === name)!;
         expect(tool.annotations?.readOnlyHint, `${name} should have readOnlyHint: false`).toBe(false);

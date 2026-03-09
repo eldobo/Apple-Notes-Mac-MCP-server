@@ -33,7 +33,7 @@ function log(message: string): void {
 
 function runOsascript(script: string, args: string[] = []): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile('osascript', ['-e', script, ...args], (error, stdout, stderr) => {
+    execFile('osascript', ['-e', script, ...args], { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(stderr || error.message));
         return;
@@ -301,16 +301,6 @@ on run argv
 end run
 `;
 
-const UPDATE_NOTE_SCRIPT = `
-on run argv
-  set noteId to item 1 of argv
-  set noteBody to item 2 of argv
-  tell application "Notes"
-    set body of note id noteId to noteBody
-  end tell
-end run
-`;
-
 export async function createNote(folder: string, title: string, body: string = '', id?: string): Promise<string> {
   const start = Date.now();
   const script = id ? CREATE_NOTE_BY_ID_SCRIPT : CREATE_NOTE_BY_NAME_SCRIPT;
@@ -330,12 +320,6 @@ export async function moveNote(noteId: string, folder: string, id?: string): Pro
   const script = id ? MOVE_NOTE_BY_ID_SCRIPT : MOVE_NOTE_BY_NAME_SCRIPT;
   await runOsascript(script, [noteId, id ?? folder]);
   log(`moveNote: ${Date.now() - start}ms`);
-}
-
-export async function updateNote(noteId: string, body: string): Promise<void> {
-  const start = Date.now();
-  await runOsascript(UPDATE_NOTE_SCRIPT, [noteId, body]);
-  log(`updateNote: ${Date.now() - start}ms`);
 }
 
 export async function readNotes(folder: string, id?: string): Promise<Note[]> {

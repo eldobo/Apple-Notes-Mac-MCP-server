@@ -28,7 +28,16 @@ See [docs/data-model.md](docs/data-model.md) for the full details: AppleScript q
 | `create_note` | Create a new note in a folder | `folder` (string, required), `title` (string, required), `body` (string, optional), `id` (string, optional folder ID) |
 | `delete_note` | Delete a note by ID | `noteId` (string, required) |
 | `move_note` | Move a note to a different folder | `noteId` (string, required), `folder` (string, required), `id` (string, optional folder ID) |
-| `update_note` | Update a note's body (HTML) | `noteId` (string, required), `body` (string, required) |
+
+### Why there's no `update_note` tool
+
+Apple Notes stores embedded attachments (images, PDFs, scans) and paragraph styles (Title, Heading, Subheading) as internal metadata separate from the HTML body. AppleScript's `set body` is the only way to update note content, but it **permanently destroys** both of these:
+
+- **Embedded attachments are severed** — images and PDFs become empty "File" placeholders. The files may still exist on disk but can no longer be linked back to the note. This is irreversible.
+- **Paragraph styles are lost** — all styled lines revert to "Body" in the style picker, even though they still render with bold/font-size styling.
+- **iCloud syncs the damage immediately** — all devices receive the destructive change with no undo.
+
+Because `set body` cannot safely modify a note without risking data loss, this server deliberately does not expose it. Notes can be created, moved, and deleted — but not updated in place. See [docs/data-model.md](docs/data-model.md) for full technical details.
 
 ### Folder ID lookups
 

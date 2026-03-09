@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { listFolders, listTags, readNotes, createNote, deleteNote, moveNote, updateNote } from './applescript.js';
+import { listFolders, listTags, readNotes, createNote, deleteNote, moveNote } from './applescript.js';
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -125,27 +125,6 @@ export function createServer(): McpServer {
       return {
         isError: true,
         content: [{ type: 'text', text: `Failed to move note: ${(error as Error).message}` }],
-      };
-    }
-  });
-
-  server.registerTool('update_note', {
-    description: 'Update a note\'s body content. Body is HTML. Apple Notes reprocesses HTML on write (not a lossless round-trip).',
-    inputSchema: {
-      noteId: z.string().describe('The note ID to update (from read_notes)'),
-      body: z.string().describe('New HTML body content for the note'),
-    },
-    annotations: { readOnlyHint: false },
-  }, async ({ noteId, body }) => {
-    try {
-      await updateNote(noteId, body);
-      return {
-        content: [{ type: 'text', text: JSON.stringify({ updated: noteId }) }],
-      };
-    } catch (error) {
-      return {
-        isError: true,
-        content: [{ type: 'text', text: `Failed to update note: ${(error as Error).message}` }],
       };
     }
   });

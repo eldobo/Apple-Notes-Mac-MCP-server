@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { listFolders, listTags, readNotes, classifyFolders, buildTagMap, createNote, deleteNote, moveNote, updateNote } from '../src/applescript.js';
+import { listFolders, listTags, readNotes, classifyFolders, buildTagMap, createNote, deleteNote, moveNote } from '../src/applescript.js';
 import * as child_process from 'node:child_process';
 
 vi.mock('node:child_process');
@@ -12,7 +12,7 @@ const GS = '\x1D';
 
 // Helper: make execFile resolve with given stdout
 function mockOsascriptOutput(stdout: string) {
-  mockExecFile.mockImplementation((_cmd: any, _args: any, callback: any) => {
+  mockExecFile.mockImplementation((_cmd: any, _args: any, _opts: any, callback: any) => {
     callback(null, stdout, '');
     return {} as any;
   });
@@ -21,7 +21,7 @@ function mockOsascriptOutput(stdout: string) {
 // Helper: queue multiple sequential osascript outputs
 function mockOsascriptOutputSequence(outputs: string[]) {
   let callIndex = 0;
-  mockExecFile.mockImplementation((_cmd: any, _args: any, callback: any) => {
+  mockExecFile.mockImplementation((_cmd: any, _args: any, _opts: any, callback: any) => {
     const stdout = outputs[callIndex] ?? '';
     callIndex++;
     callback(null, stdout, '');
@@ -30,7 +30,7 @@ function mockOsascriptOutputSequence(outputs: string[]) {
 }
 
 function mockOsascriptError(message: string) {
-  mockExecFile.mockImplementation((_cmd: any, _args: any, callback: any) => {
+  mockExecFile.mockImplementation((_cmd: any, _args: any, _opts: any, callback: any) => {
     callback(new Error(message), '', message);
     return {} as any;
   });
@@ -364,23 +364,3 @@ describe('moveNote', () => {
   });
 });
 
-describe('updateNote', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('calls osascript with note ID and HTML body', async () => {
-    mockOsascriptOutput('');
-
-    await updateNote('x-coredata://ABC/ICNote/p42', '<h1>Updated</h1>');
-
-    expect(mockExecFile).toHaveBeenCalledTimes(1);
-    const args = mockExecFile.mock.calls[0]![1] as string[];
-    expect(args).toContain('x-coredata://ABC/ICNote/p42');
-    expect(args).toContain('<h1>Updated</h1>');
-  });
-
-  it('throws on AppleScript failure', async () => {
-    mockOsascriptError('note not found');
-
-    await expect(updateNote('bad-id', '<h1>X</h1>')).rejects.toThrow();
-  });
-});

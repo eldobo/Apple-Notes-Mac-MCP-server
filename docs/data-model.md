@@ -43,7 +43,8 @@ Apple Notes has an AppleScript dictionary (`Notes.sdef`) that exposes:
 
 - **Tags on a note** — there is no `tags` property. Tags exist as `#hashtag` text in the note body (if typed) or as internal metadata (if applied via UI). Both types surface through Smart Folders.
 - **Tag write support** — `set body` with `#hashtag` text does not create tags. Tags are only recognized when typed interactively in the Apple Notes editor. Cross-account `move` also fails (error -10000).
-- **Embedded attachments** — images, PDFs, scans, and other attachments in a note appear as `￼` (U+FFFC, object replacement character) in `plaintext`. The `body` (HTML) property includes them as base64-encoded `<img>` tags or attachment references. **Warning: a note with an empty title and a plaintext body of just `￼` is NOT empty — it contains images or attachments. Never treat blank title or short plaintext as a signal that a note can be safely deleted.** Always check for U+FFFC before classifying a note as empty.
+- **Paragraph styles** — Apple Notes supports Title, Heading, Subheading, and Body styles. These are stored as **internal metadata**, not in the HTML body. When reading, Apple renders Title as `<b><span style="font-size: 24px">`, Heading as `<b><span style="font-size: 18px">`, and Subheading as `<b>`. However, writing these same HTML patterns back via `set body` produces the correct visual appearance but does **not** set the internal style — the style picker will show "Body". Using `<h1>`, `<h2>`, `<h3>` tags has the same result: Apple converts them to visual equivalents but does not assign the paragraph style. **Any `set body` call destroys and does not restore existing paragraph style metadata.** Styles can only be assigned through the Apple Notes UI.
+- **Embedded attachments** — images, PDFs, scans, and other attachments in a note appear as `￼` (U+FFFC, object replacement character) in `plaintext`. The `body` (HTML) property includes them as base64-encoded `<img>` tags or attachment references. **Warning: a note with an empty title and a plaintext body of just `￼` is NOT empty — it contains images or attachments. Never treat blank title or short plaintext as a signal that a note can be safely deleted.** Always check for U+FFFC before classifying a note as empty. **Critical: calling `set body` on a note with attachments destroys the attachment links permanently** — see [Known Limitations of `set body`](#known-limitations-of-set-body).
 - **Smart Folder flag** — there is no property to distinguish a Smart Folder from a real folder. Both are `class:folder`.
 - **Account on a folder** — while accounts exist as objects, there's no direct way to get a folder's account without traversing the hierarchy.
 
@@ -117,15 +118,16 @@ end tell
 
 Returns the new note object. The `body` property accepts HTML. The first line of content becomes the note's `name` (title).
 
-### Updating Notes
+### Updating Notes — NOT SUPPORTED
 
 ```applescript
+-- DO NOT USE: this server does not expose this operation
 tell application "Notes"
   set body of note id "noteId" to "<html>..."
 end tell
 ```
 
-Apple Notes reprocesses HTML on write — the HTML you read back may differ structurally from what you wrote, though the rendered content should be equivalent.
+While AppleScript allows `set body`, this server deliberately does not expose it. `set body` permanently destroys embedded attachments (images, PDFs, scans) and paragraph style metadata. See [Why This Server Does Not Expose `set body`](#why-this-server-does-not-expose-set-body) for the full list of reasons.
 
 ### Moving Notes
 
@@ -148,6 +150,24 @@ end tell
 Permanently deletes the note. Moves to the "Recently Deleted" folder in Apple Notes (recoverable for 30 days via the UI).
 
 **Safety**: Never delete the default "Notes" folder — Apple Notes requires at least one folder per account.
+
+### Why This Server Does Not Expose `set body`
+
+`set body` is the only way to modify note content via AppleScript, but it is destructive by design. **This server deliberately does not expose a note-update tool** because `set body` cannot safely modify a note without risking irreversible data loss. The specific problems:
+
+1. **Destroys paragraph styles** — Title, Heading, and Subheading styles are internal metadata. After any `set body` call, all lines revert to "Body" in the style picker despite rendering with correct visual appearance (bold, font-size). Styles must be reassigned manually in the Apple Notes UI.
+
+2. **Cannot create tags** — Writing `#tagname` as text in the body does not create a tag. Tags are only indexed when typed interactively in the editor.
+
+3. **Cannot remove UI-applied tags** — Tags applied via the tag picker exist as metadata outside the body. There is no body text to remove.
+
+4. **HTML is not a lossless round-trip** — Apple Notes reprocesses HTML on every write. The structure of what you read back may differ from what you wrote (e.g., `<h1>` becomes `<b><span style="font-size: 24px">`, `<h3>` becomes `<b>`). Running read→modify→write multiple times can compound structural drift.
+
+5. **Large bodies may exceed OS limits** — Notes with embedded images (base64 in HTML) can be several MB. Passing these as command-line arguments to `osascript` fails with `E2BIG`. Workaround: write the HTML to a temp file and read it from AppleScript via `read (POSIX file tmpPath)`.
+
+6. **Destroys embedded attachments** — Images, PDFs, scans, and other attachments in a note are stored as internal objects referenced by the HTML body. When `set body` is called, Apple Notes does not re-link written HTML (including base64 `<img>` tags or `<object>` references) back to the original attachment objects. The result is orphaned empty file placeholders visible in the UI — the images are gone. **This is destructive and not reversible via AppleScript.** Affected notes can only be restored from iCloud backup or Apple Notes version history (if available). The `plaintext` property shows `￼` (U+FFFC) for notes with attachments — check for this character before calling `set body` to avoid data loss.
+
+The common thread: Apple Notes stores rich metadata (styles, tags, attachments) in internal databases. The `body` property is a rendering of the content, not the source of truth. Writing to `body` modifies the content layer but cannot set metadata, and **permanently destroys attachment data that cannot be recovered programmatically**. This is why this server does not expose `set body` as a tool.
 
 ### Tag Management — Known Limitations
 
