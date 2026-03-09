@@ -5,3 +5,4 @@ dist/
 *.map
 !vitest.config.*
 backups/
+manual-edit.md
