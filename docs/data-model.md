@@ -164,7 +164,7 @@ Tags in Apple Notes have a critical distinction based on how they were created:
 **What does NOT work via AppleScript:**
 - **Adding tags**: Setting `body` to HTML containing `#tagname` does not create a tag. Apple Notes only recognizes tags when typed interactively in the editor. The text will appear in the note but won't be indexed as a tag.
 - **Removing UI-applied tags**: Tags applied via the tag picker have no body text to remove.
-- **Renaming tags**: No API exists. Tags applied via UI can't be modified programmatically.
+- **Renaming tags**: No API exists. Tags applied via UI can't be modified programmatically. The Apple Notes UI also won't rename a tag's casing (e.g. `#Owen` → `#owen`) — you'd have to remove the tag from every note and re-add it, which isn't practical.
 
 **Implication**: Tag management (adding, removing, renaming) must be done manually in the Apple Notes app. This server can read tags but cannot modify them.
 
