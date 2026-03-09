@@ -43,6 +43,7 @@ Apple Notes has an AppleScript dictionary (`Notes.sdef`) that exposes:
 
 - **Tags on a note** — there is no `tags` property. Tags exist as `#hashtag` text in the note body (if typed) or as internal metadata (if applied via UI). Both types surface through Smart Folders.
 - **Tag write support** — `set body` with `#hashtag` text does not create tags. Tags are only recognized when typed interactively in the Apple Notes editor. Cross-account `move` also fails (error -10000).
+- **Embedded attachments** — images, PDFs, scans, and other attachments in a note appear as `￼` (U+FFFC, object replacement character) in `plaintext`. A note that looks "empty" in plaintext may contain rich content. The `body` (HTML) property includes them as base64-encoded `<img>` tags or attachment references.
 - **Smart Folder flag** — there is no property to distinguish a Smart Folder from a real folder. Both are `class:folder`.
 - **Account on a folder** — while accounts exist as objects, there's no direct way to get a folder's account without traversing the hierarchy.
 
