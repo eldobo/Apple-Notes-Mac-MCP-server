@@ -12,13 +12,13 @@ Starting read-only to keep things simple and low-risk. Write operations (create 
 
 Apple Notes has three concepts that look similar but behave differently:
 
-- **Folder** — an actual container. A note lives in exactly one folder. Most users have a "Notes" folder per account (iCloud, Exchange, etc).
-- **Tag** — metadata attached to a note via `#hashtag` in the note body. A note can have many tags.
-- **Smart Folder** — a virtual view that filters notes by tag. Apple Notes creates one Smart Folder per tag. These show up in the folder list but are not containers — they are tag-based queries.
+- **Folder** — an actual container. A note lives in exactly one folder.
+- **Tag** — metadata via `#hashtag` in the note body. A note can have many tags.
+- **Smart Folder** — a virtual view that filters by tag. Not a container — Apple Notes creates one automatically per tag.
 
-AppleScript's Notes API returns Smart Folders and real folders identically (both are `class:folder`). This server distinguishes them by checking whether a folder's first note actually lives in that folder (via the note's `container` property). If the note's container ID matches the folder ID, it's a real folder. If not, it's a Smart Folder (the note lives elsewhere but matches the tag filter).
+AppleScript returns all three as `class:folder` with no way to tell them apart, and doesn't expose tags on notes. This server detects Smart Folders via container ID comparison and resolves tags by cross-referencing which notes appear in each Smart Folder.
 
-Tags are not directly exposed on notes via AppleScript. The only way to determine a note's tags is to cross-reference Smart Folders: each Smart Folder corresponds to exactly one tag, so we check which Smart Folders contain each note.
+See [docs/data-model.md](docs/data-model.md) for the full details: AppleScript quirks, detection algorithm, tag resolution pipeline, and delimiter protocol.
 
 ## Tools
 
@@ -26,7 +26,7 @@ Tags are not directly exposed on notes via AppleScript. The only way to determin
 |------|-------------|-------|
 | `list_folders` | List real folders (actual containers) with note counts | None |
 | `list_tags` | List all tags with note counts (derived from Smart Folders) | None |
-| `read_notes` | Read all notes from a real folder (title + plain text body + tags) | `folder` (string, required), `id` (string, optional) |
+| `read_notes` | Read all notes from a real folder (id, title, body, tags, timestamps) | `folder` (string, required), `id` (string, optional) |
 
 ### Folder ID lookups
 
