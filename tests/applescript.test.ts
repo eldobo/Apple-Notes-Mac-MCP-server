@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { listFolders, listTags, readNotes, classifyFolders, buildTagMap } from '../src/applescript.js';
+import { listFolders, listTags, readNotes, classifyFolders, buildTagMap, createNote, deleteNote, moveNote, updateNote } from '../src/applescript.js';
 import * as child_process from 'node:child_process';
 
 vi.mock('node:child_process');
@@ -266,5 +266,121 @@ describe('readNotes', () => {
     const result = await readNotes('Notes');
 
     expect(result[0]!.tags).toEqual(['Quotes', 'Medical']);
+  });
+});
+
+describe('createNote', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('calls osascript with folder name, title, and body', async () => {
+    mockOsascriptOutput('x-coredata://ABC/ICNote/p42');
+
+    const result = await createNote('Work', 'My Title', '<h1>Hello</h1>');
+
+    expect(result).toBe('x-coredata://ABC/ICNote/p42');
+    expect(mockExecFile).toHaveBeenCalledTimes(1);
+    const args = mockExecFile.mock.calls[0]![1] as string[];
+    expect(args).toContain('Work');
+    expect(args).toContain('My Title');
+    expect(args).toContain('<h1>Hello</h1>');
+  });
+
+  it('uses folder ID when provided', async () => {
+    mockOsascriptOutput('x-coredata://ABC/ICNote/p42');
+
+    await createNote('Work', 'My Title', '<h1>Hello</h1>', 'folder-1');
+
+    const args = mockExecFile.mock.calls[0]![1] as string[];
+    expect(args).toContain('folder-1');
+    const script = args[args.indexOf('-e') + 1]!;
+    expect(script).toContain('folder id');
+  });
+
+  it('defaults body to empty string', async () => {
+    mockOsascriptOutput('x-coredata://ABC/ICNote/p42');
+
+    await createNote('Work', 'My Title');
+
+    const args = mockExecFile.mock.calls[0]![1] as string[];
+    expect(args).toContain('');
+  });
+
+  it('throws on AppleScript failure', async () => {
+    mockOsascriptError('execution error');
+
+    await expect(createNote('Work', 'Title')).rejects.toThrow();
+  });
+});
+
+describe('deleteNote', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('calls osascript with note ID', async () => {
+    mockOsascriptOutput('');
+
+    await deleteNote('x-coredata://ABC/ICNote/p42');
+
+    expect(mockExecFile).toHaveBeenCalledTimes(1);
+    const args = mockExecFile.mock.calls[0]![1] as string[];
+    expect(args).toContain('x-coredata://ABC/ICNote/p42');
+  });
+
+  it('throws on AppleScript failure', async () => {
+    mockOsascriptError('note not found');
+
+    await expect(deleteNote('bad-id')).rejects.toThrow();
+  });
+});
+
+describe('moveNote', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('calls osascript with note ID and folder name', async () => {
+    mockOsascriptOutput('');
+
+    await moveNote('x-coredata://ABC/ICNote/p42', 'Archive');
+
+    expect(mockExecFile).toHaveBeenCalledTimes(1);
+    const args = mockExecFile.mock.calls[0]![1] as string[];
+    expect(args).toContain('x-coredata://ABC/ICNote/p42');
+    expect(args).toContain('Archive');
+  });
+
+  it('uses folder ID when provided', async () => {
+    mockOsascriptOutput('');
+
+    await moveNote('x-coredata://ABC/ICNote/p42', 'Archive', 'folder-2');
+
+    const args = mockExecFile.mock.calls[0]![1] as string[];
+    expect(args).toContain('folder-2');
+    const script = args[args.indexOf('-e') + 1]!;
+    expect(script).toContain('folder id');
+  });
+
+  it('throws on AppleScript failure', async () => {
+    mockOsascriptError('folder not found');
+
+    await expect(moveNote('bad-id', 'Archive')).rejects.toThrow();
+  });
+});
+
+describe('updateNote', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('calls osascript with note ID and HTML body', async () => {
+    mockOsascriptOutput('');
+
+    await updateNote('x-coredata://ABC/ICNote/p42', '<h1>Updated</h1>');
+
+    expect(mockExecFile).toHaveBeenCalledTimes(1);
+    const args = mockExecFile.mock.calls[0]![1] as string[];
+    expect(args).toContain('x-coredata://ABC/ICNote/p42');
+    expect(args).toContain('<h1>Updated</h1>');
+  });
+
+  it('throws on AppleScript failure', async () => {
+    mockOsascriptError('note not found');
+
+    await expect(updateNote('bad-id', '<h1>X</h1>')).rejects.toThrow();
   });
 });

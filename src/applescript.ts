@@ -232,6 +232,112 @@ export async function buildTagMap(smartFolderIds: string[]): Promise<Map<string,
   return tagMap;
 }
 
+const READ_NOTE_BODY_SCRIPT = `
+on run argv
+  set noteId to item 1 of argv
+  tell application "Notes"
+    return body of note id noteId
+  end tell
+end run
+`;
+
+export async function readNoteBody(noteId: string): Promise<string> {
+  const start = Date.now();
+  const result = await runOsascript(READ_NOTE_BODY_SCRIPT, [noteId]);
+  log(`readNoteBody: ${Date.now() - start}ms`);
+  return result;
+}
+
+const CREATE_NOTE_BY_NAME_SCRIPT = `
+on run argv
+  set folderName to item 1 of argv
+  set noteTitle to item 2 of argv
+  set noteBody to item 3 of argv
+  tell application "Notes"
+    set newNote to make new note at folder folderName with properties {name:noteTitle, body:noteBody}
+    return id of newNote
+  end tell
+end run
+`;
+
+const CREATE_NOTE_BY_ID_SCRIPT = `
+on run argv
+  set folderId to item 1 of argv
+  set noteTitle to item 2 of argv
+  set noteBody to item 3 of argv
+  tell application "Notes"
+    set newNote to make new note at folder id folderId with properties {name:noteTitle, body:noteBody}
+    return id of newNote
+  end tell
+end run
+`;
+
+const DELETE_NOTE_SCRIPT = `
+on run argv
+  set noteId to item 1 of argv
+  tell application "Notes"
+    delete note id noteId
+  end tell
+end run
+`;
+
+const MOVE_NOTE_BY_NAME_SCRIPT = `
+on run argv
+  set noteId to item 1 of argv
+  set folderName to item 2 of argv
+  tell application "Notes"
+    move note id noteId to folder folderName
+  end tell
+end run
+`;
+
+const MOVE_NOTE_BY_ID_SCRIPT = `
+on run argv
+  set noteId to item 1 of argv
+  set folderId to item 2 of argv
+  tell application "Notes"
+    move note id noteId to folder id folderId
+  end tell
+end run
+`;
+
+const UPDATE_NOTE_SCRIPT = `
+on run argv
+  set noteId to item 1 of argv
+  set noteBody to item 2 of argv
+  tell application "Notes"
+    set body of note id noteId to noteBody
+  end tell
+end run
+`;
+
+export async function createNote(folder: string, title: string, body: string = '', id?: string): Promise<string> {
+  const start = Date.now();
+  const script = id ? CREATE_NOTE_BY_ID_SCRIPT : CREATE_NOTE_BY_NAME_SCRIPT;
+  const result = await runOsascript(script, [id ?? folder, title, body]);
+  log(`createNote: ${Date.now() - start}ms`);
+  return result;
+}
+
+export async function deleteNote(noteId: string): Promise<void> {
+  const start = Date.now();
+  await runOsascript(DELETE_NOTE_SCRIPT, [noteId]);
+  log(`deleteNote: ${Date.now() - start}ms`);
+}
+
+export async function moveNote(noteId: string, folder: string, id?: string): Promise<void> {
+  const start = Date.now();
+  const script = id ? MOVE_NOTE_BY_ID_SCRIPT : MOVE_NOTE_BY_NAME_SCRIPT;
+  await runOsascript(script, [noteId, id ?? folder]);
+  log(`moveNote: ${Date.now() - start}ms`);
+}
+
+export async function updateNote(noteId: string, body: string): Promise<void> {
+  const start = Date.now();
+  await runOsascript(UPDATE_NOTE_SCRIPT, [noteId, body]);
+  log(`updateNote: ${Date.now() - start}ms`);
+}
+
 export async function readNotes(folder: string, id?: string): Promise<Note[]> {
   const totalStart = Date.now();
 

@@ -4,9 +4,7 @@ MCP server that gives Claude (or any MCP client) read access to Apple Notes on m
 
 ## Why
 
-Apple Notes has no API. This server bridges that gap using AppleScript, so you can point Claude at your notes and get things like organizational analysis, content summaries, and structure recommendations — without manually copy-pasting.
-
-Starting read-only to keep things simple and low-risk. Write operations (create notes, move between folders) are planned for v2 once the read experience proves useful.
+Apple Notes has no API. This server bridges that gap using AppleScript, so you can point Claude at your notes and get things like organizational analysis, content summaries, and structure recommendations — without manually copy-pasting. AppleScript is macOS-only, so this server requires a Mac.
 
 ## Data Model
 
@@ -27,6 +25,10 @@ See [docs/data-model.md](docs/data-model.md) for the full details: AppleScript q
 | `list_folders` | List real folders (actual containers) with note counts | None |
 | `list_tags` | List all tags with note counts (derived from Smart Folders) | None |
 | `read_notes` | Read all notes from a real folder (id, title, body, tags, timestamps) | `folder` (string, required), `id` (string, optional) |
+| `create_note` | Create a new note in a folder | `folder` (string, required), `title` (string, required), `body` (string, optional), `id` (string, optional folder ID) |
+| `delete_note` | Delete a note by ID | `noteId` (string, required) |
+| `move_note` | Move a note to a different folder | `noteId` (string, required), `folder` (string, required), `id` (string, optional folder ID) |
+| `update_note` | Update a note's body (HTML) | `noteId` (string, required), `body` (string, required) |
 
 ### Folder ID lookups
 
@@ -73,6 +75,6 @@ npm run inspector # test in browser
 
 ## Requirements
 
-- macOS (Apple Notes is mac-only)
+- macOS (this server uses AppleScript, which is macOS-only)
 - Node.js 18+
 - First run will prompt for Automation permission to access Notes
