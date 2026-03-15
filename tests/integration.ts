@@ -4,7 +4,7 @@
  *
  * Creates test notes in "test actual folder", exercises CRUD, then cleans up.
  */
-import { createNote, deleteNote, moveNote, readNotes, listFolders, listTags } from '../src/applescript.js';
+import { createNote, deleteNote, moveNote, readNotes, listFolders } from '../src/applescript.js';
 
 const TEST_FOLDER = 'test actual folder';
 const TEST_FOLDER_ID = 'x-coredata://C83F395A-DE84-4A65-90F6-CCDC071037A6/ICFolder/p408';

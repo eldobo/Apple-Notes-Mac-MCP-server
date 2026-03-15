@@ -12,15 +12,15 @@ Folders are the primary organizational unit. Notes cannot exist outside a folder
 
 ### Tags
 
-A tag is metadata attached to a note. A note can have zero or many tags. Tags can be created by typing `#hashtag` in the note body or by using the tag picker in the Apple Notes UI. These two methods store the tag differently — typed tags appear as text in the HTML body, while UI-applied tags are stored as internal metadata only (see [Tag Management — Known Limitations](#tag-management--known-limitations)).
+A tag is metadata attached to a note. A note can have zero or many tags. Tags can be created by typing `#hashtag` in the note body or by using the tag picker in the Apple Notes UI. These two methods store the tag differently — typed tags appear as text in the HTML body, while UI-applied tags are stored as internal metadata only.
+
+**AppleScript cannot reliably read tags.** There is no `tags` property on notes. Typed tags can be found by parsing the body text, but UI-applied tags are invisible to AppleScript. This server does not attempt tag resolution because no approach works 100% of the time. See [Why This Server Does Not Expose Tags](#why-this-server-does-not-expose-tags).
 
 ### Smart Folders
 
 A Smart Folder is a virtual view — a saved query created by the user (File > New Smart Folder). Smart Folders can filter notes by tag, creation date, modification date, checklist status, mentions, and other criteria. A single Smart Folder can combine multiple filters. Smart Folders are not containers; the notes they display still live in their real folders.
 
-In the Apple Notes UI, Smart Folders appear in the sidebar alongside real folders with a gear icon.
-
-**Implication for this server**: We use Smart Folders to resolve tags (since AppleScript doesn't expose tags directly). This works when Smart Folders map one-to-one with tags, but Smart Folders with non-tag filters (e.g., "created in the last week") or multi-tag filters will produce incorrect tag data. See [Tag Resolution — Limitations](#tag-resolution).
+In the Apple Notes UI, Smart Folders appear in the sidebar alongside real folders with a gear icon. This server detects and excludes Smart Folders from `list_folders` results.
 
 ### Accounts
 
@@ -46,8 +46,7 @@ The application also exposes `default account` and `selection` (list of currentl
 
 ### What AppleScript Does NOT Expose
 
-- **Tags on a note** — there is no `tags` property. Tags exist as `#hashtag` text in the note body (if typed) or as internal metadata (if applied via UI). Both types surface through Smart Folders.
-- **Tag write support** — `set body` with `#hashtag` text does not create tags. Tags are only recognized when typed interactively in the Apple Notes editor. Cross-account `move` also fails (error -10000).
+- **Tags on a note** — there is no `tags` property. Tags exist as `#hashtag` text in the note body (if typed) or as internal metadata (if applied via UI). Neither form is reliably accessible via AppleScript. See [Why This Server Does Not Expose Tags](#why-this-server-does-not-expose-tags).
 - **Paragraph styles** — Apple Notes supports Title, Heading, Subheading, and Body styles. These are stored as **internal metadata**, not in the HTML body. When reading, Apple renders Title as `<b><span style="font-size: 24px">`, Heading as `<b><span style="font-size: 18px">`, and Subheading as `<b>`. However, writing these same HTML patterns back via `set body` produces the correct visual appearance but does **not** set the internal style — the style picker will show "Body". Using `<h1>`, `<h2>`, `<h3>` tags has the same result: Apple converts them to visual equivalents but does not assign the paragraph style. **Any `set body` call destroys and does not restore existing paragraph style metadata.** Styles can only be assigned through the Apple Notes UI.
 - **Embedded attachment content** — while the `attachment` class exposes metadata (name, id, dates, content-id), the actual file data (image bytes, PDF content) is not directly accessible via AppleScript properties. Attachments appear as `￼` (U+FFFC, object replacement character) in `plaintext` and as base64-encoded `<img>` tags or attachment references in `body` HTML. **Warning: a note with an empty title and a plaintext body of just `￼` is NOT empty — it contains images or attachments. Never treat blank title or short plaintext as a signal that a note can be safely deleted.** Always check for U+FFFC before classifying a note as empty. **Critical: calling `set body` on a note with attachments destroys the attachment links permanently** — see [Why This Server Does Not Expose `set body`](#why-this-server-does-not-expose-set-body).
 - **Smart Folder flag** — there is no property to distinguish a Smart Folder from a real folder. Both are `class:folder`.
@@ -69,33 +68,12 @@ This works because a Smart Folder's notes always live in their real folders — 
 
 **AppleScript quirk**: `id of container of note` throws error -1728. You must use `id of (get container of note)` instead. The `get` forces AppleScript to resolve the container reference to a concrete folder object before accessing its `id` property.
 
-### Tag Resolution
-
-Since tags aren't exposed as note properties, we derive them by cross-referencing Smart Folders:
-
-1. **Classify** all folders as real or Smart Folder (one AppleScript call)
-2. **Build a tag map** — for each Smart Folder, get all note IDs it contains. Invert this to a `Map<noteId, tagName[]>` (one AppleScript call)
-3. **Read notes** from the target folder (one AppleScript call)
-4. **Annotate** each note with its tags from the map
-
-**Known limitation**: This approach assumes every Smart Folder corresponds to exactly one tag. Smart Folders are user-created and can have arbitrary filters (date ranges, checklist status, multiple tags, mentions). If a user has Smart Folders with non-tag filters, those folder names will incorrectly appear as tags. There is currently no way to distinguish a tag-based Smart Folder from one using other filter criteria via AppleScript.
-
-This requires 3 AppleScript calls per `read_notes` invocation. Timing telemetry is logged to stderr so the latency cost can be monitored:
-
-```
-[apple-notes] classifyFolders: 342ms
-[apple-notes] buildTagMap (8 smart folders): 1623ms
-[apple-notes] readNotes: 6412ms
-[apple-notes] readNotes total: 8377ms
-```
-
 ### Delimiter Protocol
 
 AppleScript's string handling is fragile — JSON construction with string concatenation breaks on special characters in note content. Instead, we use ASCII control characters as delimiters:
 
 | Character | Code | Name | Used For |
 |-----------|------|------|----------|
-| `\x1D` | 29 | GS (Group Separator) | Between Smart Folders in tag map output |
 | `\x1E` | 30 | RS (Record Separator) | Between records (folders, notes) |
 | `\x1F` | 31 | US (Unit Separator) | Between fields within a record |
 
@@ -176,24 +154,23 @@ Permanently deletes the note. Moves to the "Recently Deleted" folder in Apple No
 
 The common thread: Apple Notes stores rich metadata (styles, tags, attachments) in internal databases. The `body` property is a rendering of the content, not the source of truth. Writing to `body` modifies the content layer but cannot set metadata, and **permanently destroys attachment data that cannot be recovered programmatically**. This is why this server does not expose `set body` as a tool.
 
-### Tag Management — Known Limitations
+### Why This Server Does Not Expose Tags
 
-Tags in Apple Notes have a critical distinction based on how they were created:
+Tags in Apple Notes are stored two ways, neither of which AppleScript can reliably access:
 
-1. **Typed in the editor**: When a user types `#tagname` in the Apple Notes app, the tag text is stored in the HTML body and Apple Notes recognizes it as a tag. These tags can be found and modified via `set body`.
+1. **Typed as `#hashtag` in the note body** — these appear in the HTML/plaintext and could theoretically be parsed out. But this only catches tags created by typing, not all tags.
 
-2. **Applied via the UI tag picker**: When a user applies a tag through the Apple Notes tag picker (without typing `#` in the body), the tag is stored as internal metadata — it does **not** appear in the HTML body at all.
+2. **Applied via the UI tag picker** — these are stored as internal metadata and do **not** appear in the body at all. They are completely invisible to AppleScript.
 
-**What works via AppleScript:**
-- Reading which notes have which tags (via Smart Folder cross-referencing)
-- Modifying tags that exist as `#text` in the note body (find/replace via `set body`)
+There is no `tags` property on notes in the AppleScript dictionary. The only indirect approach — cross-referencing Smart Folders — is unreliable because Smart Folders are user-created with arbitrary filters (dates, checklists, multiple tags) and there is no way to distinguish a tag-based Smart Folder from one using other criteria.
+
+Rather than expose a tag tool that works some of the time, this server does not attempt tag resolution. Tags must be managed manually in the Apple Notes app.
 
 **What does NOT work via AppleScript:**
-- **Adding tags**: Setting `body` to HTML containing `#tagname` does not create a tag. Apple Notes only recognizes tags when typed interactively in the editor. The text will appear in the note but won't be indexed as a tag.
-- **Removing UI-applied tags**: Tags applied via the tag picker have no body text to remove.
-- **Renaming tags**: No API exists. Tags applied via UI can't be modified programmatically. The Apple Notes UI also won't rename a tag's casing (e.g. `#Owen` → `#owen`) — you'd have to remove the tag from every note and re-add it, which isn't practical.
-
-**Implication**: Tag management (adding, removing, renaming) must be done manually in the Apple Notes app. This server can read tags but cannot modify them.
+- **Reading tags** — no `tags` property exists. Neither body parsing nor Smart Folder cross-referencing gives complete results.
+- **Adding tags** — `set body` with `#tagname` text does not create a tag. Tags are only indexed when typed interactively in the editor.
+- **Removing UI-applied tags** — tags applied via the picker exist as metadata outside the body.
+- **Renaming tags** — no API exists. The Apple Notes UI also won't rename a tag's casing (e.g. `#Owen` → `#owen`).
 
 ### Cross-Account Move Limitation
 

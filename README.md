@@ -11,10 +11,10 @@ Apple Notes has no API. This server bridges that gap using AppleScript, so you c
 Apple Notes has three concepts that look similar but behave differently:
 
 - **Folder** — an actual container. A note lives in exactly one folder.
-- **Tag** — metadata via `#hashtag` in the note body. A note can have many tags.
+- **Tag** — metadata via `#hashtag` in the note body or applied via the tag picker UI. A note can have many tags.
 - **Smart Folder** — a virtual view created by the user. Filters notes by tag, date, checklist status, or other criteria. Not a container — notes inside a Smart Folder still live in their real folders.
 
-AppleScript returns all three as `class:folder` with no way to tell them apart, and doesn't expose tags on notes. This server detects Smart Folders via container ID comparison and resolves tags by cross-referencing which notes appear in each Smart Folder. This assumes each Smart Folder maps to one tag — Smart Folders with non-tag filters (dates, checklists) will produce incorrect tag data.
+AppleScript returns folders and Smart Folders as the same `class:folder` with no way to tell them apart. This server detects Smart Folders via container ID comparison and excludes them from `list_folders`.
 
 See [docs/data-model.md](docs/data-model.md) for the full details: AppleScript quirks, detection algorithm, tag resolution pipeline, and delimiter protocol.
 
@@ -23,8 +23,7 @@ See [docs/data-model.md](docs/data-model.md) for the full details: AppleScript q
 | Tool | Description | Input |
 |------|-------------|-------|
 | `list_folders` | List real folders (actual containers) with note counts | None |
-| `list_tags` | List all tags with note counts (derived from Smart Folders) | None |
-| `read_notes` | Read all notes from a real folder (id, title, body, tags, timestamps) | `folder` (string, required), `id` (string, optional) |
+| `read_notes` | Read all notes from a real folder (id, title, body, timestamps) | `folder` (string, required), `id` (string, optional) |
 | `create_note` | Create a new note in a folder | `folder` (string, required), `title` (string, required), `body` (string, optional), `id` (string, optional folder ID) |
 | `delete_note` | Delete a note by ID | `noteId` (string, required) |
 | `move_note` | Move a note to a different folder | `noteId` (string, required), `folder` (string, required), `id` (string, optional folder ID) |
@@ -45,14 +44,9 @@ Because `set body` cannot safely modify a note without risking data loss, this s
 
 This matters when multiple folders share the same name. Apple Notes can store notes across multiple account backends — most commonly iCloud, but also Microsoft Exchange. Apple and Microsoft have a long-standing integration that allows Apple Notes to sync with Microsoft's Sticky Notes service via Exchange. If a user has both backends enabled, they'll have two folders named "Notes" (one per account) that are only distinguishable by ID.
 
-### Tag resolution
+### Why there's no `list_tags` tool
 
-When `read_notes` is called, the server automatically resolves tags for every note by:
-1. Classifying all folders as real or Smart Folder
-2. Building a tag map by checking which notes appear in each Smart Folder
-3. Annotating each note with its tags from the map
-
-This adds latency (one AppleScript call per phase). Timing telemetry is logged to stderr so the cost can be monitored.
+AppleScript does not expose tags as a property on notes. Tags can be created two ways — typed as `#hashtag` in the note body, or applied via the UI tag picker — and only typed tags appear in the body text. There is no reliable way to enumerate all tags on a note programmatically. Rather than provide an unreliable tool, this server does not attempt tag resolution. See [docs/data-model.md](docs/data-model.md) for full details.
 
 ## Setup
 

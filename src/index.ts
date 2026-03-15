@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { listFolders, listTags, readNotes, createNote, deleteNote, moveNote } from './applescript.js';
+import { listFolders, readNotes, createNote, deleteNote, moveNote } from './applescript.js';
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -26,25 +26,8 @@ export function createServer(): McpServer {
     }
   });
 
-  server.registerTool('list_tags', {
-    description: 'List all tags in Apple Notes with their note counts. Tags are derived from Smart Folders (assumes each Smart Folder corresponds to one tag). Smart Folders with non-tag filters may produce incorrect results.',
-    annotations: { readOnlyHint: true },
-  }, async () => {
-    try {
-      const tags = await listTags();
-      return {
-        content: [{ type: 'text', text: JSON.stringify(tags, null, 2) }],
-      };
-    } catch (error) {
-      return {
-        isError: true,
-        content: [{ type: 'text', text: `Failed to list tags: ${(error as Error).message}` }],
-      };
-    }
-  });
-
   server.registerTool('read_notes', {
-    description: 'Read all notes from a specific Apple Notes folder. Returns note id, title, plain text body, tags, and timestamps.',
+    description: 'Read all notes from a specific Apple Notes folder. Returns note id, title, plain text body, and timestamps.',
     inputSchema: {
       folder: z.string().describe('Name of the folder to read notes from'),
       id: z.string().optional().describe('Folder ID from list_folders. When provided, takes precedence over folder name for lookup (useful when multiple folders share the same name)'),
