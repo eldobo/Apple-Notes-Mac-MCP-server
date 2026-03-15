@@ -12,9 +12,9 @@ Apple Notes has three concepts that look similar but behave differently:
 
 - **Folder** — an actual container. A note lives in exactly one folder.
 - **Tag** — metadata via `#hashtag` in the note body. A note can have many tags.
-- **Smart Folder** — a virtual view that filters by tag. Not a container — Apple Notes creates one automatically per tag.
+- **Smart Folder** — a virtual view created by the user. Filters notes by tag, date, checklist status, or other criteria. Not a container — notes inside a Smart Folder still live in their real folders.
 
-AppleScript returns all three as `class:folder` with no way to tell them apart, and doesn't expose tags on notes. This server detects Smart Folders via container ID comparison and resolves tags by cross-referencing which notes appear in each Smart Folder.
+AppleScript returns all three as `class:folder` with no way to tell them apart, and doesn't expose tags on notes. This server detects Smart Folders via container ID comparison and resolves tags by cross-referencing which notes appear in each Smart Folder. This assumes each Smart Folder maps to one tag — Smart Folders with non-tag filters (dates, checklists) will produce incorrect tag data.
 
 See [docs/data-model.md](docs/data-model.md) for the full details: AppleScript quirks, detection algorithm, tag resolution pipeline, and delimiter protocol.
 

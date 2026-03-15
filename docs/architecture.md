@@ -1,26 +1,7 @@
 # Architecture — Apple Notes MCP Server
 
 ## Purpose
-MCP server that gives Claude access to Apple Notes on macOS. The long-term goal is a full-lifecycle Notes companion — but we're building incrementally:
-
-1. **v1 (now):** Read-only. List folders, read notes. Use this to analyze existing Notes and recommend an organizational structure.
-2. **v2:** Write operations. Create notes and folders, move notes between folders — making it easy to act on the organizational recommendations from v1.
-3. **Beyond:** Search, tagging, templates, and whatever else emerges from real usage.
-
-Starting read-only keeps risk low while delivering immediate value: point Claude at your Notes, get actionable structure advice, then build the tools to execute on it.
-
-## Scope (v1)
-Two tools, both read-only:
-
-### `list_folders`
-- **Input:** None
-- **Output:** Array of folder objects: `{ name: string, id: string, noteCount: number }`
-- **Behavior:** Returns all top-level folders visible in Apple Notes. Nested folders are not in scope for v1.
-
-### `read_notes`
-- **Input:** `{ folder: string }` — folder name to read from
-- **Output:** Array of note objects: `{ title: string, body: string, createdAt: string, modifiedAt: string }`
-- **Behavior:** Returns all notes in the specified folder. `body` is plain text (HTML stripped). Returns an error if the folder doesn't exist.
+MCP server that gives Claude access to Apple Notes on macOS via AppleScript.
 
 ## Technical Approach
 
@@ -47,13 +28,6 @@ src/
 - Invalid folder names return a tool error, not a crash.
 
 ## Security
-- Read-only — no write operations on Notes data.
-- No user input is interpolated into AppleScript. Folder names are passed as arguments to `osascript`, not string-concatenated into scripts.
+- No user input is interpolated into AppleScript. Folder names and note IDs are passed as arguments to `osascript`, not string-concatenated into scripts.
 - No network access. All data stays local.
-
-## Not in Scope (v1)
-- Write/create/delete notes
-- Nested folder hierarchy
-- Note attachments or images
-- Search across all folders
-- Authentication (runs locally, inherits macOS user permissions)
+- Note content updates (`set body`) are deliberately not exposed — see [data-model.md](data-model.md) for why.

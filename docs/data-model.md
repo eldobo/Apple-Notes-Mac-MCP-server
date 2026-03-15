@@ -16,9 +16,11 @@ A tag is metadata attached to a note. A note can have zero or many tags. Tags ca
 
 ### Smart Folders
 
-A Smart Folder is a virtual view — a saved query that filters notes by tag. Apple Notes creates exactly one Smart Folder per tag, automatically. Smart Folders are not containers; the notes they display still live in their real folders.
+A Smart Folder is a virtual view — a saved query created by the user (File > New Smart Folder). Smart Folders can filter notes by tag, creation date, modification date, checklist status, mentions, and other criteria. A single Smart Folder can combine multiple filters. Smart Folders are not containers; the notes they display still live in their real folders.
 
-In the Apple Notes UI, Smart Folders appear in the sidebar alongside real folders with a gear icon. There is no way for a user to manually create or delete a Smart Folder — they are a side effect of tag usage.
+In the Apple Notes UI, Smart Folders appear in the sidebar alongside real folders with a gear icon.
+
+**Implication for this server**: We use Smart Folders to resolve tags (since AppleScript doesn't expose tags directly). This works when Smart Folders map one-to-one with tags, but Smart Folders with non-tag filters (e.g., "created in the last week") or multi-tag filters will produce incorrect tag data. See [Tag Resolution — Limitations](#tag-resolution).
 
 ### Accounts
 
@@ -35,16 +37,19 @@ Apple Notes has an AppleScript dictionary (`Notes.sdef`) that exposes:
 
 | Object | Properties | Notes |
 |--------|-----------|-------|
-| `account` | `name`, `id` | The backend (iCloud, Exchange, etc.) |
-| `folder` | `name`, `id`, `container`, `shared` | Both real folders AND Smart Folders are returned as `class:folder` |
-| `note` | `name`, `id`, `body`, `plaintext`, `creation date`, `modification date`, `container` | `container` always points to the note's real folder |
+| `account` | `name`, `id`, `upgraded`, `default folder` | The backend (iCloud, Exchange, etc.) |
+| `folder` | `name`, `id`, `container`, `shared` | Both real folders AND Smart Folders are returned as `class:folder`. `container` is `account \| folder` (folders can nest). |
+| `note` | `name`, `id`, `body`, `plaintext`, `creation date`, `modification date`, `container`, `password protected`, `shared` | `container` always points to the note's real folder |
+| `attachment` | `name`, `id`, `container`, `content identifier`, `creation date`, `modification date`, `URL`, `shared` | All read-only. `container` is the parent note. `content identifier` is the content-id URL in the note's HTML. Responds to `save`. |
+
+The application also exposes `default account` and `selection` (list of currently selected notes in the UI), and commands `show` (reveals an object in the UI) and `open note location` (opens a note URL).
 
 ### What AppleScript Does NOT Expose
 
 - **Tags on a note** — there is no `tags` property. Tags exist as `#hashtag` text in the note body (if typed) or as internal metadata (if applied via UI). Both types surface through Smart Folders.
 - **Tag write support** — `set body` with `#hashtag` text does not create tags. Tags are only recognized when typed interactively in the Apple Notes editor. Cross-account `move` also fails (error -10000).
 - **Paragraph styles** — Apple Notes supports Title, Heading, Subheading, and Body styles. These are stored as **internal metadata**, not in the HTML body. When reading, Apple renders Title as `<b><span style="font-size: 24px">`, Heading as `<b><span style="font-size: 18px">`, and Subheading as `<b>`. However, writing these same HTML patterns back via `set body` produces the correct visual appearance but does **not** set the internal style — the style picker will show "Body". Using `<h1>`, `<h2>`, `<h3>` tags has the same result: Apple converts them to visual equivalents but does not assign the paragraph style. **Any `set body` call destroys and does not restore existing paragraph style metadata.** Styles can only be assigned through the Apple Notes UI.
-- **Embedded attachments** — images, PDFs, scans, and other attachments in a note appear as `￼` (U+FFFC, object replacement character) in `plaintext`. The `body` (HTML) property includes them as base64-encoded `<img>` tags or attachment references. **Warning: a note with an empty title and a plaintext body of just `￼` is NOT empty — it contains images or attachments. Never treat blank title or short plaintext as a signal that a note can be safely deleted.** Always check for U+FFFC before classifying a note as empty. **Critical: calling `set body` on a note with attachments destroys the attachment links permanently** — see [Known Limitations of `set body`](#known-limitations-of-set-body).
+- **Embedded attachment content** — while the `attachment` class exposes metadata (name, id, dates, content-id), the actual file data (image bytes, PDF content) is not directly accessible via AppleScript properties. Attachments appear as `￼` (U+FFFC, object replacement character) in `plaintext` and as base64-encoded `<img>` tags or attachment references in `body` HTML. **Warning: a note with an empty title and a plaintext body of just `￼` is NOT empty — it contains images or attachments. Never treat blank title or short plaintext as a signal that a note can be safely deleted.** Always check for U+FFFC before classifying a note as empty. **Critical: calling `set body` on a note with attachments destroys the attachment links permanently** — see [Why This Server Does Not Expose `set body`](#why-this-server-does-not-expose-set-body).
 - **Smart Folder flag** — there is no property to distinguish a Smart Folder from a real folder. Both are `class:folder`.
 - **Account on a folder** — while accounts exist as objects, there's no direct way to get a folder's account without traversing the hierarchy.
 
@@ -72,6 +77,8 @@ Since tags aren't exposed as note properties, we derive them by cross-referencin
 2. **Build a tag map** — for each Smart Folder, get all note IDs it contains. Invert this to a `Map<noteId, tagName[]>` (one AppleScript call)
 3. **Read notes** from the target folder (one AppleScript call)
 4. **Annotate** each note with its tags from the map
+
+**Known limitation**: This approach assumes every Smart Folder corresponds to exactly one tag. Smart Folders are user-created and can have arbitrary filters (date ranges, checklist status, multiple tags, mentions). If a user has Smart Folders with non-tag filters, those folder names will incorrectly appear as tags. There is currently no way to distinguish a tag-based Smart Folder from one using other filter criteria via AppleScript.
 
 This requires 3 AppleScript calls per `read_notes` invocation. Timing telemetry is logged to stderr so the latency cost can be monitored:
 

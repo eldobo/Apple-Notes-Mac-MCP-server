@@ -10,7 +10,7 @@ export function createServer(): McpServer {
   });
 
   server.registerTool('list_folders', {
-    description: 'List real folders (actual containers) in Apple Notes with their note counts. Excludes Smart Folders (tag-based views).',
+    description: 'List real folders (actual containers) in Apple Notes with their note counts. Excludes Smart Folders (user-created filtered views).',
     annotations: { readOnlyHint: true },
   }, async () => {
     try {
@@ -27,7 +27,7 @@ export function createServer(): McpServer {
   });
 
   server.registerTool('list_tags', {
-    description: 'List all tags in Apple Notes with their note counts. Tags are derived from Smart Folders, which Apple Notes creates one-to-one for each tag.',
+    description: 'List all tags in Apple Notes with their note counts. Tags are derived from Smart Folders (assumes each Smart Folder corresponds to one tag). Smart Folders with non-tag filters may produce incorrect results.',
     annotations: { readOnlyHint: true },
   }, async () => {
     try {
